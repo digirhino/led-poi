@@ -72,7 +72,7 @@
       <div class="meter-bg"><div id="bassMeter" class="meter-fill"></div></div>
       <div class="smart-row" style="display:none;">
         <label>Base BPM: <input type="number" id="baseBpm" value="128" min="60" max="200"></label>
-        <label>Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="140"></label>
+        <label>Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="122"></label>
       </div>
       <div id="debugLog" style="display:none;">Initializing microphone...</div>
     </div>
@@ -670,20 +670,20 @@ function audioLoop() {
     peakEnergy = Math.max(0.025, peakEnergy * 0.9992);
   }
 
-  if (energyHistory.length >= 90 && (now - lastTagTriggerTime) > 3500) {
-    const recentAvg = energyHistory.slice(-60).reduce((a, b) => a + b, 0) / 60;
-    const relativeLevel = recentAvg / peakEnergy; // 0.0 to 1.0+ compared to loudest part of track
-    const hasActiveBeat = (now - lastKickTime) < 1600; // True if a kick hit in the last 1.6s
+  if (energyHistory.length >= 90 && (now - lastTagTriggerTime) > 3000) {
+    const recentSlice = energyHistory.slice(-60);
+    const recentPeak = Math.max(...recentSlice);
+    const relativeLevel = recentPeak / peakEnergy; // Peak-to-peak ratio (0.0 to 1.0)
+    const hasActiveBeat = (now - lastKickTime) < 1800; // True if a kick hit in the last 1.8s
 
     let detectedZone = "build";
-    if (!hasActiveBeat && relativeLevel < 0.48) {
-      // True breakdown: no kicks + noticeably quieter than the drop
+    if (!hasActiveBeat && relativeLevel < 0.55) {
+      // Breakdown: no kicks + low bass peaks
       detectedZone = "chill";
-    } else if (hasActiveBeat && relativeLevel >= 0.58) {
-      // Sustained drop: active kicks + strong sub-bass (stays locked in DROP!)
+    } else if (hasActiveBeat && relativeLevel >= 0.72) {
+      // Drop: active kicks + strong bass peaks near track ceiling
       detectedZone = "drop";
     }
-
 
     const labelEl = document.getElementById('energyLabel');
     labelEl.innerText = detectedZone.toUpperCase();

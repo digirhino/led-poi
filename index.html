@@ -516,6 +516,7 @@ let smartActive = false;
 let wakeLock = null;
 let audioCtx = null, analyser = null, micStream = null, micRunning = false;
 let energyHistory = [], kickTimestamps = [];
+let peakEnergy = 0.03;
 let lastKickTime = 0, lastTagTriggerTime = 0, lastPresetSwitchTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
 
 async function requestWakeLock() {
@@ -580,6 +581,7 @@ async function enterSmartMode() {
 
     micRunning = true;
     energyHistory = [];
+    peakEnergy = 0.03;
     kickTimestamps = [];
     logSmart("Mic active! Auto-switch & BPM scaling enabled.");
     audioLoop();
@@ -661,14 +663,27 @@ function audioLoop() {
     }
   }
 
-  if (energyHistory.length >= 120 && (now - lastTagTriggerTime) > 5000) {
+  // Track session loudness ceiling (rises fast on loud drops, decays slowly over ~30s)
+  if (rms > peakEnergy) {
+    peakEnergy = peakEnergy * 0.85 + rms * 0.15;
+  } else {
+    peakEnergy = Math.max(0.025, peakEnergy * 0.9992);
+  }
+
+  if (energyHistory.length >= 90 && (now - lastTagTriggerTime) > 3500) {
     const recentAvg = energyHistory.slice(-60).reduce((a, b) => a + b, 0) / 60;
+    const relativeLevel = recentAvg / peakEnergy; // 0.0 to 1.0+ compared to loudest part of track
+    const hasActiveBeat = (now - lastKickTime) < 1600; // True if a kick hit in the last 1.6s
+
     let detectedZone = "build";
-    if (recentAvg < avgEnergy * 0.72 || recentAvg < 0.012) {
+    if (!hasActiveBeat && relativeLevel < 0.48) {
+      // True breakdown: no kicks + noticeably quieter than the drop
       detectedZone = "chill";
-    } else if (recentAvg > avgEnergy * 1.18) {
+    } else if (hasActiveBeat && relativeLevel >= 0.58) {
+      // Sustained drop: active kicks + strong sub-bass (stays locked in DROP!)
       detectedZone = "drop";
     }
+
 
     const labelEl = document.getElementById('energyLabel');
     labelEl.innerText = detectedZone.toUpperCase();

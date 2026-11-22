@@ -680,7 +680,7 @@ function audioLoop() {
     if (relativeLevel < 0.52 || recentPeak < 0.022) {
       // Breakdown / quiet intro: sub-bass dropped below ~52% of track ceiling
       detectedZone = "chill";
-    } else if (relativeLevel >= 0.72 && recentKicks >= 2) {
+    } else if (relativeLevel >= 0.80 && recentKicks >= 3) {
       // Drop: strong sub-bass near track ceiling + steady kicks
       detectedZone = "drop";
     }

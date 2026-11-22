@@ -307,7 +307,7 @@ const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
 if (Math.abs(scale - lastSentScale) >= 0.04) {
 lastSentScale = scale;
 document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
-fetch(api(/smart?scale=${scale.toFixed(2)}), {method:"POST"}).catch(()=>{});
+fetch(api("/smart?scale=" + scale.toFixed(2)), {method:"POST"}).catch(()=>{});
 }
 }
 }
@@ -328,7 +328,7 @@ if (detectedZone !== currentEnergyZone) {
 currentEnergyZone = detectedZone;
 if (document.getElementById('smartJumpToggle').checked) {
 lastTagTriggerTime = now;
-fetch(api(/smart?tag=${detectedZone}), {method:"POST"}).then(() => loadState()).catch(()=>{});
+fetch(api("/smart?tag=" + detectedZone), {method:"POST"}).then(() => loadState()).catch(()=>{});
 }
 }
 }

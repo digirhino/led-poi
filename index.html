@@ -29,13 +29,43 @@
   
   .active-item { border: 2px solid #bb86fc !important; box-shadow: 0 0 10px #bb86fc; }
   .smart-btn { background: #1d5e2a; border: 1px solid #28a745; font-weight: bold; }
+  .meter-bg { width: 100%; height: 14px; background: #2a2a2a; border-radius: 7px; overflow: hidden; margin: 8px 0; }
+  .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); transition: width 0.05s linear; }
+  .smart-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+  #debugLog { font-family: monospace; font-size: 11px; color: #0f0; background: #000; padding: 6px; border-radius: 4px; margin-top: 8px; }
 </style>
+
 
 </head>
 <body>
 <div id="page">
-    <div class="panel">
+  <!-- SMART MODE HEADER & AUDIO PANEL (Hidden until Smart Playlist is clicked) -->
+  <div id="smartPanel" style="display:none;">
+    <div class="smart-row" style="margin-bottom: 10px;">
+      <button onclick="exitSmartMode()">&#8592; Back to Master Control</button>
+      <span id="smartStatusDot" style="font-size:12px; color:#28a745;">● Smart Mode Active</span>
+    </div>
+    <div class="panel" style="border-color: #28a745;">
+      <h3 style="margin:0 0 10px 0; color:#28a745;">Smart Audio Sync (Active)</h3>
+      <div class="smart-row">
+        <div>BPM: <strong id="bpmVal" style="font-size:18px; color:#4da6ff;">--</strong></div>
+        <div>Energy: <strong id="energyLabel" style="color:#28a745;">LISTENING</strong></div>
+        <div>Scale: <strong id="scaleVal">1.00x</strong></div>
+      </div>
+      <div class="meter-bg"><div id="bassMeter" class="meter-fill"></div></div>
+      <div class="smart-row" style="margin-top: 8px; font-size: 13px;">
+        <label>Base BPM: <input type="number" id="baseBpm" value="128" min="60" max="200" style="width:55px; background:#252525; color:#fff; border:1px solid #444; padding:3px;"></label>
+        <label style="flex:1; margin-left:10px;">Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="140" style="width:100%;"></label>
+      </div>
+      <div id="debugLog">Initializing microphone...</div>
+    </div>
+  </div>
+
+  <!-- NORMAL CONTROL PANELS (Hidden when Smart Mode is active) -->
+  <div id="normalPanels">
+  <div class="panel">
     <h3>Master Control</h3>
+
     <div style="text-align:center; margin-bottom:10px; font-size:12px;">
       <span id="statusDot" style="color:#ffc107;">● Connecting</span>
     </div>
@@ -58,25 +88,29 @@
     <div id="steps"></div>
     <button onclick="addStep()" style="width:100%;">+ Add Step</button>
   </div>
+  </div>
 
   <div class="panel">
-    <h3>Presets & Playlist</h3>
-    <select id="presetList" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #444;"></select>
+    <h3 id="playlistPanelTitle">Presets & Playlist</h3>
+    <div id="presetControls">
+      <select id="presetList" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #444;"></select>
       <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
-      <button onclick="applyPreset()">Apply</button>
-      <button onclick="savePreset()">Save</button>
-      <button onclick="deletePreset()">Delete</button>
-      <button onclick="exportPreset()">Export</button>
-      <input type="file" id="importPresetFile" style="display:none" onchange="importPreset()">
-      <button onclick="document.getElementById('importPresetFile').click()">Import</button>
+        <button onclick="applyPreset()">Apply</button>
+        <button onclick="savePreset()">Save</button>
+        <button onclick="deletePreset()">Delete</button>
+        <button onclick="exportPreset()">Export</button>
+        <input type="file" id="importPresetFile" style="display:none" onchange="importPreset()">
+        <button onclick="document.getElementById('importPresetFile').click()">Import</button>
+      </div>
+      <button onclick="addPlaylistItem()" style="width:100%; margin-top:8px;">Add to Playlist</button>
+      <div style="margin-top:10px; border-top:1px solid #444; padding-top:10px; display:flex; justify-content:center; flex-wrap:wrap;">
+        <input type="file" id="importPlaylistFile" style="display:none" onchange="importPlaylist()">
+        <button onclick="document.getElementById('importPlaylistFile').click()">Import Playlist</button>
+        <button onclick="exportPlaylist()">Export Playlist</button>
+        <button class="smart-btn" onclick="enterSmartMode()">Smart Playlist</button>
+      </div>
     </div>
-    <button onclick="addPlaylistItem()" style="width:100%; margin-top:8px;">Add to Playlist</button>
-    <div style="margin-top:10px; border-top:1px solid #444; padding-top:10px; display:flex; justify-content:center; flex-wrap:wrap;">
-      <input type="file" id="importPlaylistFile" style="display:none" onchange="importPlaylist()">
-      <button onclick="document.getElementById('importPlaylistFile').click()">Import Playlist</button>
-      <button onclick="exportPlaylist()">Export Playlist</button>
-      <button class="smart-btn" onclick="window.location.href='./smart.html'">Smart Playlist</button>
-    </div>
+
     <div style="margin-top:10px;">
       <div id="playlistSteps" style="margin-top:10px;"></div>
 
@@ -216,6 +250,25 @@ function renderPlaylist() {
     label.style.fontWeight = 'bold';
     label.style.textShadow = '1px 1px 2px #000';
     row.appendChild(label);
+    const tagSel = document.createElement('select');
+    tagSel.style.cssText = 'background:rgba(0,0,0,0.5); color:#fff; border:1px solid #555; padding:4px; border-radius:3px; font-size:12px;';
+    const tags = [
+      { val: 'any', text: 'Any' },
+      { val: 'chill', text: 'Chill' },
+      { val: 'build', text: 'Build' },
+      { val: 'drop', text: 'Drop' }
+    ];
+    tags.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.val;
+      opt.textContent = t.text;
+      if ((item.energyTag || 'any') === t.val) opt.selected = true;
+      tagSel.appendChild(opt);
+    });
+    tagSel.onclick = (e) => e.stopPropagation();
+    tagSel.onchange = (e) => { item.energyTag = e.target.value; savePlaylist(); };
+    row.appendChild(tagSel);
+
 
     const durInput = document.createElement('input');
     durInput.type = 'number';
@@ -413,6 +466,148 @@ function fetchState(){
             renderPlaylist(); 
         }
     }); 
+}
+// ===================== SMART MODE & WEB AUDIO ENGINE =====================
+let smartActive = false;
+let audioCtx = null, analyser = null, micStream = null, micRunning = false;
+let energyHistory = [], kickTimestamps = [];
+let lastKickTime = 0, lastTagTriggerTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
+
+function logSmart(msg, isErr) {
+  const el = document.getElementById('debugLog');
+  if (!el) return;
+  el.style.color = isErr ? '#ff4444' : '#0f0';
+  el.innerText = msg;
+}
+
+async function enterSmartMode() {
+  smartActive = true;
+  document.getElementById('normalPanels').style.display = 'none';
+  document.getElementById('presetControls').style.display = 'none';
+  document.getElementById('smartPanel').style.display = 'block';
+  document.getElementById('playlistPanelTitle').textContent = 'Smart Playlist Viewer';
+
+  fetch('/smart?smart=1', { method: 'POST' }).catch(() => {});
+
+  if (micRunning) return;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 120;
+    filter.Q.value = 1.2;
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(filter);
+    filter.connect(analyser);
+
+    micRunning = true;
+    energyHistory = [];
+    kickTimestamps = [];
+    logSmart("Mic active! Auto-switch & BPM scaling enabled.");
+    audioLoop();
+  } catch (err) {
+    logSmart("Mic blocked: " + err.name + " - " + err.message, true);
+  }
+}
+
+function exitSmartMode() {
+  smartActive = false;
+  if (micRunning) {
+    micRunning = false;
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close();
+  }
+  document.getElementById('smartPanel').style.display = 'none';
+  document.getElementById('normalPanels').style.display = 'block';
+  document.getElementById('presetControls').style.display = 'block';
+  document.getElementById('playlistPanelTitle').textContent = 'Presets & Playlist';
+
+  fetch('/smart?smart=0&scale=1.00', { method: 'POST' }).catch(() => {});
+}
+
+function audioLoop() {
+  if (!micRunning) return;
+  requestAnimationFrame(audioLoop);
+
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+
+  let sumSq = 0;
+  for (let i = 0; i < data.length; i++) {
+    const norm = (data[i] - 128) / 128;
+    sumSq += norm * norm;
+  }
+  const rms = Math.sqrt(sumSq / data.length);
+
+  energyHistory.push(rms);
+  if (energyHistory.length > 360) energyHistory.shift();
+  const avgEnergy = energyHistory.reduce((a, b) => a + b, 0) / energyHistory.length;
+
+  const meterPct = Math.min(100, Math.round((rms / Math.max(0.02, avgEnergy * 2.2)) * 100));
+  document.getElementById('bassMeter').style.width = meterPct + "%";
+
+  const now = performance.now();
+  const sensRatio = parseInt(document.getElementById('sensitivity').value) / 100;
+
+  if (rms > 0.015 && rms > avgEnergy * sensRatio && (now - lastKickTime) > 260) {
+    lastKickTime = now;
+    kickTimestamps.push(now);
+    if (kickTimestamps.length > 12) kickTimestamps.shift();
+
+    if (kickTimestamps.length >= 4) {
+      let intervals = [];
+      for (let i = 1; i < kickTimestamps.length; i++) {
+        const diff = kickTimestamps[i] - kickTimestamps[i - 1];
+        if (diff >= 280 && diff <= 1000) intervals.push(diff);
+      }
+      if (intervals.length >= 3) {
+        intervals.sort((a, b) => a - b);
+        const medianMs = intervals[Math.floor(intervals.length / 2)];
+        const bpm = Math.round(60000 / medianMs);
+        document.getElementById('bpmVal').innerText = bpm;
+
+        const baseBpm = parseInt(document.getElementById('baseBpm').value) || 128;
+        const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
+        if (Math.abs(scale - lastSentScale) >= 0.04) {
+          lastSentScale = scale;
+          document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
+          fetch("/smart?scale=" + scale.toFixed(2), { method: "POST" }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  if (energyHistory.length >= 120 && (now - lastTagTriggerTime) > 5000) {
+    const recentAvg = energyHistory.slice(-60).reduce((a, b) => a + b, 0) / 60;
+    let detectedZone = "build";
+    if (recentAvg < avgEnergy * 0.72 || recentAvg < 0.012) {
+      detectedZone = "chill";
+    } else if (recentAvg > avgEnergy * 1.18) {
+      detectedZone = "drop";
+    }
+
+    const labelEl = document.getElementById('energyLabel');
+    labelEl.innerText = detectedZone.toUpperCase();
+    labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
+
+    if (detectedZone !== currentEnergyZone) {
+      currentEnergyZone = detectedZone;
+      lastTagTriggerTime = now;
+      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => fetchState()).catch(() => {});
+    }
+  }
 }
 
 fetchState(); 

@@ -386,7 +386,7 @@ async function exportPlaylist() {
         await fetch('/applyPreset?name=' + encodeURIComponent(item.presetName));
         const state = await fetch('/state');
         const presetState = await state.json();
-        exportData.push({ duration: item.duration, preset: { name: item.presetName, state: presetState } });
+    exportData.push({ duration: item.duration, energyTag: item.energyTag || 'any', preset: { name: item.presetName, state: presetState } });
     }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'playlist.json'; a.click();
@@ -411,7 +411,7 @@ async function processImportedPlaylist(imported) {
     await fetch('/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item.preset.state) });
     await fetch('/apply', { method: 'POST' });
     await fetch('/savePreset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.preset.name }) });
-    playlist.push({ presetName: item.preset.name, duration: item.duration });
+    playlist.push({ presetName: item.preset.name, duration: item.duration, energyTag: item.energyTag || 'any' });
   }
   renderPlaylist(); savePlaylist(); loadPresets();
 }

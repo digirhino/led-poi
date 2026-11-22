@@ -637,9 +637,55 @@ function audioLoop() {
   }
 }
 
-fetchState(); 
-loadPresets().then(() => { loadPlaylist(); });
-setInterval(fetchState, 300);
+// Instant startup from localStorage cache while live ESP32 syncs
+try {
+  const cachedPresets = localStorage.getItem('poi_presets');
+  const cachedPlaylist = localStorage.getItem('poi_playlist');
+  if (cachedPresets) presetsData = JSON.parse(cachedPresets);
+  if (cachedPlaylist) { playlist = JSON.parse(cachedPlaylist); renderPlaylist(); }
+} catch (e) {}
+
+let isFetchingState = false;
+function safeFetchState() {
+  if (isFetchingState) return;
+  isFetchingState = true;
+  fetch('/state')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('statusDot').textContent = '● Connected';
+      document.getElementById('statusDot').style.color = '#4da6ff';
+      document.getElementById('brightness').value = d.brightness;
+      document.getElementById('rainbowSpeed').value = 256 - d.rainbowSpeed;
+      document.getElementById('propagationMode').checked = d.propagationMode;
+
+      currentEffect = d.effect;
+      if (currentEffect === 1) rainbowBtn.classList.add('active'); else rainbowBtn.classList.remove('active');
+
+      if (!isEditing && !isSaving) {
+        colorInput.value = rgbToHex(d.solidR, d.solidG, d.solidB);
+        colorBtn.style.backgroundColor = colorInput.value;
+        sequencerSteps = d.sequencerSteps;
+        currentPlaylistIdx = d.currentPlaylistIndex;
+        renderSequencer();
+        renderPlaylist();
+      }
+    })
+    .catch(() => {
+      document.getElementById('statusDot').textContent = '● Offline';
+      document.getElementById('statusDot').style.color = '#dc3545';
+    })
+    .finally(() => { isFetchingState = false; });
+}
+
+safeFetchState();
+loadPresets().then(() => {
+  try { localStorage.setItem('poi_presets', JSON.stringify(presetsData)); } catch (e) {}
+  return loadPlaylist();
+}).then(() => {
+  try { localStorage.setItem('poi_playlist', JSON.stringify(playlist)); } catch (e) {}
+});
+setInterval(safeFetchState, 500);
+
 </script>
 </body>
 </html>

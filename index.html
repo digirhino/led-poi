@@ -667,8 +667,22 @@ try {
 } catch (e) {}
 
 let isFetchingState = false;
+let hasLoadedInitialData = false;
+
+function syncPresetsAndPlaylist() {
+  loadPresets()
+    .then(() => {
+      try { localStorage.setItem('poi_presets', JSON.stringify(presetsData)); } catch (e) {}
+      return loadPlaylist();
+    })
+    .then(() => {
+      try { localStorage.setItem('poi_playlist', JSON.stringify(playlist)); } catch (e) {}
+    })
+    .catch(() => {});
+}
 
 function openWifiSettings() {
+
   const isAndroid = /Android/i.test(navigator.userAgent);
   if (isAndroid) {
     // Opens Android Wi-Fi picker directly
@@ -689,6 +703,11 @@ function safeFetchState() {
     .then(d => {
       document.getElementById('connectScreen').style.display = 'none';
       document.getElementById('mainUI').style.display = 'block';
+      if (!hasLoadedInitialData) {
+        hasLoadedInitialData = true;
+        syncPresetsAndPlaylist();
+      }
+
       document.getElementById('statusDot').textContent = '● Connected';
       document.getElementById('statusDot').style.color = '#4da6ff';
 
@@ -716,13 +735,9 @@ function safeFetchState() {
 }
 
 safeFetchState();
-loadPresets().then(() => {
-  try { localStorage.setItem('poi_presets', JSON.stringify(presetsData)); } catch (e) {}
-  return loadPlaylist();
-}).then(() => {
-  try { localStorage.setItem('poi_playlist', JSON.stringify(playlist)); } catch (e) {}
-});
+syncPresetsAndPlaylist();
 setInterval(safeFetchState, 500);
+
 
 </script>
 </body>

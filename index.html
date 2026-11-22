@@ -674,16 +674,17 @@ function audioLoop() {
     const recentSlice = energyHistory.slice(-60);
     const recentPeak = Math.max(...recentSlice);
     const relativeLevel = recentPeak / peakEnergy; // Peak-to-peak ratio (0.0 to 1.0)
-    const hasActiveBeat = (now - lastKickTime) < 1800; // True if a kick hit in the last 1.8s
+    const recentKicks = kickTimestamps.filter(t => (now - t) < 2200).length;
 
     let detectedZone = "build";
-    if (!hasActiveBeat && relativeLevel < 0.55) {
-      // Breakdown: no kicks + low bass peaks
+    if (relativeLevel < 0.52 || recentPeak < 0.022) {
+      // Breakdown / quiet intro: sub-bass dropped below ~52% of track ceiling
       detectedZone = "chill";
-    } else if (hasActiveBeat && relativeLevel >= 0.72) {
-      // Drop: active kicks + strong bass peaks near track ceiling
+    } else if (relativeLevel >= 0.72 && recentKicks >= 2) {
+      // Drop: strong sub-bass near track ceiling + steady kicks
       detectedZone = "drop";
     }
+
 
     const labelEl = document.getElementById('energyLabel');
     labelEl.innerText = detectedZone.toUpperCase();

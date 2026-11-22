@@ -37,8 +37,7 @@
     <div class="panel">
     <h3>Master Control</h3>
     <div style="text-align:center; margin-bottom:10px; font-size:12px;">
-      ESP32 IP: <input type="text" id="espHost" value="http://192.168.4.1" style="width:130px; background:#252525; color:#fff; border:1px solid #444; padding:3px; border-radius:3px;">
-      <span id="statusDot" style="color:#ffc107; margin-left:6px;">● Connecting</span>
+      <span id="statusDot" style="color:#ffc107;">● Connecting</span>
     </div>
     <div class="topColumns">
       <div class="column">Brightness<br><input type="range" id="brightness" min="1" max="255" onchange="apply(currentEffect)"></div>
@@ -63,7 +62,7 @@
   <div class="panel">
     <h3>Presets & Playlist</h3>
     <select id="presetList" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #444;"></select>
-    <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
+      <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
       <button onclick="applyPreset()">Apply</button>
       <button onclick="savePreset()">Save</button>
       <button onclick="deletePreset()">Delete</button>
@@ -71,15 +70,16 @@
       <input type="file" id="importPresetFile" style="display:none" onchange="importPreset()">
       <button onclick="document.getElementById('importPresetFile').click()">Import</button>
     </div>
+    <button onclick="addPlaylistItem()" style="width:100%; margin-top:8px;">Add to Playlist</button>
     <div style="margin-top:10px; border-top:1px solid #444; padding-top:10px; display:flex; justify-content:center; flex-wrap:wrap;">
-        <input type="file" id="importPlaylistFile" style="display:none" onchange="importPlaylist()">
-        <button onclick="document.getElementById('importPlaylistFile').click()">Import Playlist</button>
-        <button onclick="exportPlaylist()">Export Playlist</button>
-        <button class="smart-btn" onclick="window.location.href='./smart.html'">Smart Playlist</button>
+      <input type="file" id="importPlaylistFile" style="display:none" onchange="importPlaylist()">
+      <button onclick="document.getElementById('importPlaylistFile').click()">Import Playlist</button>
+      <button onclick="exportPlaylist()">Export Playlist</button>
+      <button class="smart-btn" onclick="window.location.href='./smart.html'">Smart Playlist</button>
     </div>
-    <div style="margin-top:15px;">
-      <button onclick="addPlaylistItem()" style="width:100%;">Add to Playlist</button>
+    <div style="margin-top:10px;">
       <div id="playlistSteps" style="margin-top:10px;"></div>
+
       <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
         <button onclick="playlistStart()">Play</button>
         <button onclick="playlistStop()">Pause</button>
@@ -92,11 +92,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
+const ESP_HOST = 'http://192.168.4.1';
 const _origFetch = window.fetch;
 window.fetch = function(url, opts) {
   if (typeof url === 'string' && url.startsWith('/')) {
-    const base = document.getElementById('espHost').value.replace(/\/$/, '');
-    url = base + url;
+    url = ESP_HOST + url;
   }
   return _origFetch.call(this, url, opts);
 };

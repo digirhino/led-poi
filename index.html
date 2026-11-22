@@ -41,6 +41,28 @@
 </head>
 <body>
 <div id="page">
+  <!-- CONNECT SPLASH SCREEN (Shown until ESP32 responds) -->
+  <div id="connectScreen" class="panel" style="text-align:center; padding:30px 15px; margin-top:40px;">
+    <h2 style="color:#4da6ff; margin-top:0;">LED Poi Controller</h2>
+    <p id="connectMsg" style="color:#aaa; font-size:14px; margin-bottom:20px;">
+      Connect your phone's Wi-Fi to <strong>LEDPoi</strong> to begin.
+    </p>
+    <button onclick="openWifiSettings()" style="background:#1a426e; border:1px solid #4da6ff; padding:12px 20px; font-size:16px; font-weight:bold; width:100%; margin-bottom:10px;">
+      Connect to LEDPoi Wi-Fi
+    </button>
+    <button onclick="safeFetchState()" style="width:100%; padding:10px;">
+      Check Connection Now
+    </button>
+  </div>
+
+  <!-- MAIN INTERFACE (Hidden until connected) -->
+  <div id="mainUI" style="display:none;">
+        </div>
+  </div>
+</div>
+<script>
+
+
   <!-- SMART MODE HEADER & AUDIO PANEL (Hidden until Smart Playlist is clicked) -->
   <div id="smartPanel" style="display:none;">
     <div class="smart-row" style="margin-bottom: 10px;">
@@ -646,14 +668,31 @@ try {
 } catch (e) {}
 
 let isFetchingState = false;
+
+function openWifiSettings() {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    // Opens Android Wi-Fi picker directly
+    window.location.href = 'intent:#Intent;action=android.settings.WIFI_SETTINGS;end';
+  } else {
+    // iOS / Desktop fallback guidance
+    document.getElementById('connectMsg').innerHTML =
+      'Open your device <strong>Settings &rarr; Wi-Fi</strong>, select <strong>LEDPoi</strong>, and tap <em>Use Without Internet</em> if prompted.';
+  }
+}
+
+  
 function safeFetchState() {
   if (isFetchingState) return;
   isFetchingState = true;
   fetch('/state')
     .then(r => r.json())
     .then(d => {
+      document.getElementById('connectScreen').style.display = 'none';
+      document.getElementById('mainUI').style.display = 'block';
       document.getElementById('statusDot').textContent = '● Connected';
       document.getElementById('statusDot').style.color = '#4da6ff';
+
       document.getElementById('brightness').value = d.brightness;
       document.getElementById('rainbowSpeed').value = 256 - d.rainbowSpeed;
       document.getElementById('propagationMode').checked = d.propagationMode;

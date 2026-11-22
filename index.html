@@ -513,9 +513,32 @@ function fetchState(){
 }
 // ===================== SMART MODE & WEB AUDIO ENGINE =====================
 let smartActive = false;
+let wakeLock = null;
 let audioCtx = null, analyser = null, micStream = null, micRunning = false;
 let energyHistory = [], kickTimestamps = [];
-let lastKickTime = 0, lastTagTriggerTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
+let lastKickTime = 0, lastTagTriggerTime = 0, lastPresetSwitchTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && smartActive) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && smartActive) {
+    requestWakeLock();
+  }
+});
+
 
 function logSmart(msg, isErr) {
   const el = document.getElementById('debugLog');
@@ -526,6 +549,8 @@ function logSmart(msg, isErr) {
 
 async function enterSmartMode() {
   smartActive = true;
+  lastPresetSwitchTime = performance.now();
+  requestWakeLock();
   renderPlaylist();
   document.getElementById('normalPanels').style.display = 'none';
   document.getElementById('presetControls').style.display = 'none';
@@ -565,6 +590,7 @@ async function enterSmartMode() {
 
 function exitSmartMode() {
   smartActive = false;
+  releaseWakeLock();
   renderPlaylist();
   if (micRunning) {
     micRunning = false;
@@ -648,11 +674,18 @@ function audioLoop() {
     labelEl.innerText = detectedZone.toUpperCase();
     labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
 
+    const sameZoneHoldMs = 12000; // Rotate to another matching preset after 12 seconds
     if (detectedZone !== currentEnergyZone) {
       currentEnergyZone = detectedZone;
       lastTagTriggerTime = now;
-      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => fetchState()).catch(() => {});
+      lastPresetSwitchTime = now;
+      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => safeFetchState()).catch(() => {});
+    } else if ((now - lastPresetSwitchTime) > sameZoneHoldMs) {
+      lastTagTriggerTime = now;
+      lastPresetSwitchTime = now;
+      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => safeFetchState()).catch(() => {});
     }
+
   }
 }
 

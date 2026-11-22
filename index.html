@@ -57,11 +57,6 @@
 
   <!-- MAIN INTERFACE (Hidden until connected) -->
   <div id="mainUI" style="display:none;">
-        </div>
-  </div>
-</div>
-<script>
-
 
   <!-- SMART MODE HEADER & AUDIO PANEL (Hidden until Smart Playlist is clicked) -->
   <div id="smartPanel" style="display:none;">
@@ -145,8 +140,10 @@
       </div>
     </div>
   </div>
+  </div>
 </div>
 <script>
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
@@ -531,6 +528,7 @@ function logSmart(msg, isErr) {
 
 async function enterSmartMode() {
   smartActive = true;
+  renderPlaylist();
   document.getElementById('normalPanels').style.display = 'none';
   document.getElementById('presetControls').style.display = 'none';
   document.getElementById('smartPanel').style.display = 'block';
@@ -569,6 +567,7 @@ async function enterSmartMode() {
 
 function exitSmartMode() {
   smartActive = false;
+  renderPlaylist();
   if (micRunning) {
     micRunning = false;
     if (micStream) micStream.getTracks().forEach(t => t.stop());

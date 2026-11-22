@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.json">
 <style>
 body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; padding:12px; }
-h1,h2,h3 { margin:8px 0; }
+h1,h2 { margin:8px 0; }
 .card { background:#1e1e1e; border:1px solid #333; border-radius:8px; padding:12px; margin-bottom:14px; }
 label { display:block; margin-top:8px; font-size:14px; }
 input[type=range] { width:100%; }
@@ -15,14 +15,12 @@ select, input[type=text], input[type=number], button {
   padding:8px; margin-top:6px; border-radius:4px; border:1px solid #444; background:#222; color:#fff; font-size:14px;
 }
 button { cursor:pointer; }
-button:hover { background:#333; }
-button:active { background:#444; }
 .btn-green { background:#1d5e2a; border-color:#28a745; }
 .btn-red { background:#631c1c; border-color:#dc3545; }
 .btn-blue { background:#1a426e; border-color:#007bff; }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .step-row, .playlist-row { border:1px solid #333; padding:8px; margin:6px 0; border-radius:6px; background:#181818; }
-.playlist-row.active-item { border: 2px solid #28a745; background: #1a2a1e; }
+.playlist-row.active-item { border:2px solid #28a745; background:#1a2a1e; }
 .small { font-size:12px; color:#aaa; }
 .meter-bg { width:100%; height:14px; background:#2a2a2a; border-radius:7px; overflow:hidden; margin-top:6px; }
 .meter-fill { height:100%; width:0%; background:linear-gradient(90deg, #28a745, #ffc107, #dc3545); transition:width 0.05s linear; }
@@ -36,40 +34,29 @@ button:active { background:#444; }
   <h1>LED Poi Control</h1>
   <span id="connStatus" class="badge" style="color:#ffc107;">Starting...</span>
 </div>
-<div id="debugLog">JS Loaded OK. Waiting for ESP32...</div>
+<div id="debugLog">HTML Loaded. Loading app.js...</div>
 
-<!-- SMART AUDIO ENGINE CARD -->
 <div class="card" style="border-color:#28a745;">
   <div class="row" style="justify-content:space-between;">
     <h2 style="margin:0;">Smart Audio Sync (Mic)</h2>
     <button id="micBtn" class="btn-green" onclick="toggleMic()">Start Mic Listener</button>
   </div>
-  <div class="small" style="margin-top:4px;">Detects 120Hz kicks, BPM & energy shifts on your phone and triggers the Master ESP32.</div>
-
   <div class="row" style="margin-top:10px; justify-content:space-between;">
     <div>BPM: <strong id="bpmVal" style="font-size:18px; color:#4da6ff;">--</strong></div>
     <div>Energy: <strong id="energyLabel" style="color:#28a745;">IDLE</strong></div>
-    <div>Tempo Scale: <strong id="scaleVal">1.00x</strong></div>
+    <div>Scale: <strong id="scaleVal">1.00x</strong></div>
   </div>
-
   <div class="meter-bg"><div id="bassMeter" class="meter-fill"></div></div>
-
   <div class="row" style="margin-top:10px;">
-    <label style="margin:0;"><input type="checkbox" id="smartJumpToggle" onchange="syncSmartFlags()"> Auto-Switch Playlist by Energy</label>
-    <label style="margin:0;"><input type="checkbox" id="autoTempoToggle" onchange="syncSmartFlags()"> Auto-Scale Sequencer BPM</label>
+    <label style="margin:0;"><input type="checkbox" id="smartJumpToggle" onchange="syncSmartFlags()"> Auto-Switch by Energy</label>
+    <label style="margin:0;"><input type="checkbox" id="autoTempoToggle" onchange="syncSmartFlags()"> Auto-Scale BPM</label>
   </div>
-
   <div class="row" style="margin-top:8px;">
-    <label style="margin:0; flex:1;">Base Track BPM:
-      <input type="number" id="baseBpm" value="128" min="60" max="200" style="width:70px;">
-    </label>
-    <label style="margin:0; flex:1;">Kick Sensitivity:
-      <input type="range" id="sensitivity" min="115" max="180" value="140">
-    </label>
+    <label style="margin:0; flex:1;">Base BPM: <input type="number" id="baseBpm" value="128" min="60" max="200" style="width:65px;"></label>
+    <label style="margin:0; flex:1;">Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="140"></label>
   </div>
 </div>
 
-<!-- GLOBAL & PRESET QUICK LOAD -->
 <div class="card">
   <h2>Global & Quick Load</h2>
   <div class="row">
@@ -85,22 +72,18 @@ button:active { background:#444; }
   </label>
 </div>
 
-<!-- PLAYLIST WITH ENERGY TAGS -->
 <div class="card">
   <h2>Smart Playlist</h2>
   <div class="row">
-    <button class="btn-green" onclick="startPlaylist()">Start Playlist</button>
-    <button class="btn-red" onclick="stopPlaylist()">Stop Playlist</button>
+    <button class="btn-green" onclick="startPlaylist()">Start</button>
+    <button class="btn-red" onclick="stopPlaylist()">Stop</button>
     <button class="btn-blue" onclick="skipNext()">Skip Next</button>
-  </div>
-  <div class="row">
-    <button onclick="addPlaylistRow()">+ Add Item</button>
-    <button onclick="savePlaylist()">Save Playlist</button>
+    <button onclick="addPlaylistRow()">+ Item</button>
+    <button onclick="savePlaylist()">Save</button>
   </div>
   <div id="playlistContainer"></div>
 </div>
 
-<!-- MODE & SEQUENCER EDITOR -->
 <div class="card">
   <h2>Mode & Sequencer Editor</h2>
   <label>Mode:
@@ -110,25 +93,19 @@ button:active { background:#444; }
       <option value="2">Step Sequencer</option>
     </select>
   </label>
-
   <div id="solidBox">
     <label>Solid Color: <input type="color" id="solidColor" value="#ffffff" onchange="sendState()"></label>
   </div>
-
   <div id="rainbowBox" style="display:none;">
     <label>Rainbow Speed: <span id="rval">5</span>
       <input type="range" id="rainbowSpeed" min="1" max="50" value="5" oninput="document.getElementById('rval').innerText=this.value" onchange="sendState()">
     </label>
   </div>
-
   <div id="seqBox" style="display:none;">
-    <label style="margin:10px 0;">
-      <input type="checkbox" id="propagationMode" onchange="sendState()"> Enable LED Propagation (Travel along strip)
-    </label>
+    <label style="margin:10px 0;"><input type="checkbox" id="propagationMode" onchange="sendState()"> Enable LED Propagation</label>
     <div id="steps"></div>
     <button onclick="addStep()">+ Add Step</button>
   </div>
-
   <div class="row" style="margin-top:10px;">
     <button class="btn-blue" onclick="applyEffect()">Apply Now</button>
     <input type="text" id="presetName" placeholder="Preset name">
@@ -136,309 +113,6 @@ button:active { background:#444; }
   </div>
 </div>
 
-<script>
-function logMsg(msg) {
-  document.getElementById('debugLog').innerText = msg;
-}
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(e => logMsg("SW error: " + e.message));
-}
-
-let state = { effect:0, brightness:128, solidR:255, solidG:255, solidB:255, rainbowSpeed:5, propagationMode:false, steps:[], currentPlaylistIndex:0 };
-let presets = [];
-let playlist = [];
-
-function api(path) {
-  const base = document.getElementById('espIp').value.replace(/\/$/, '');
-  return base + path;
-}
-
-function hexToRgb(h){ return [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)]; }
-function rgbToHex(r,g,b){ return "#" + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
-
-function toggleSections(){
-  const e = parseInt(document.getElementById('effect').value);
-  document.getElementById('solidBox').style.display = (e===0)?"block":"none";
-  document.getElementById('rainbowBox').style.display = (e===1)?"block":"none";
-  document.getElementById('seqBox').style.display = (e===2)?"block":"none";
-}
-
-function renderSteps(){
-  const stepsEl = document.getElementById('steps');
-  stepsEl.innerHTML = "";
-  (state.steps || []).forEach((s,i)=>{
-    const d = document.createElement("div");
-    d.className = "step-row";
-    d.innerHTML = `
-      <div class="row">
-        <b>Step ${i+1}</b>
-        <input type="color" value="${rgbToHex(s.r,s.g,s.b)}" onchange="const c=hexToRgb(this.value);state.steps[${i}].r=c[0];state.steps[${i}].g=c[1];state.steps[${i}].b=c[2]">
-        <button class="btn-red" onclick="state.steps.splice(${i},1);renderSteps()">X</button>
-      </div>
-      <div class="row">
-        <label class="small">Hold(ms) <input type="number" min="15" max="60000" value="${s.duration}" style="width:75px" onchange="state.steps[${i}].duration=parseInt(this.value)"></label>
-        <label class="small">Fade(ms) <input type="number" min="0" max="60000" value="${s.fadeDuration||0}" style="width:75px" onchange="state.steps[${i}].fadeDuration=parseInt(this.value)||0"></label>
-      </div>`;
-    stepsEl.appendChild(d);
-  });
-}
-
-function addStep(){
-  if(!state.steps) state.steps = [];
-  if(state.steps.length>=16) return alert("Max 16 steps");
-  state.steps.push({r:255,g:0,b:0,duration:300,fadeDuration:100});
-  renderSteps();
-}
-
-function updateGlobalBrightness() {
-  state.brightness = parseInt(document.getElementById('brightness').value);
-  sendState();
-}
-
-function sendState(){
-  state.effect = parseInt(document.getElementById('effect').value);
-  state.brightness = parseInt(document.getElementById('brightness').value);
-  [state.solidR,state.solidG,state.solidB] = hexToRgb(document.getElementById('solidColor').value);
-  state.rainbowSpeed = parseInt(document.getElementById('rainbowSpeed').value);
-  state.propagationMode = document.getElementById('propagationMode').checked;
-  fetch(api("/state"), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(state)}).catch(e => logMsg("Send error: " + e.message));
-}
-
-function applyEffect(){
-  sendState();
-  fetch(api("/apply"), {method:"POST"}).catch(e => logMsg("Apply error: " + e.message));
-}
-
-async function savePreset(){
-  const name = document.getElementById('presetName').value.trim();
-  if(!name) return alert("Enter preset name");
-  sendState();
-  await fetch(api("/savePreset?name="+encodeURIComponent(name)), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(state)});
-  document.getElementById('presetName').value = "";
-  loadPresets();
-}
-
-async function deletePreset(){
-  const name = document.getElementById('presetSelect').value;
-  if(!name) return;
-  await fetch(api("/deletePreset?name="+encodeURIComponent(name)));
-  loadPresets();
-}
-
-async function loadPresets(){
-  const r = await fetch(api("/getPresets"));
-  presets = await r.json();
-const sel = document.getElementById('presetSelect');
-sel.innerHTML = "";
-presets.forEach(p=>{
-const o = document.createElement("option");
-o.value = p.name; o.textContent = p.name;
-sel.appendChild(o);
-});
-renderPlaylist();
-}
-async function applySelectedPreset(){
-const name = document.getElementById('presetSelect').value;
-if(!name) return;
-await fetch(api("/applyPreset?name="+encodeURIComponent(name)));
-loadState();
-}
-function renderPlaylist(){
-const container = document.getElementById('playlistContainer');
-container.innerHTML = "";
-playlist.forEach((it,i)=>{
-const d = document.createElement("div");
-d.className = "playlist-row" + (i === state.currentPlaylistIndex ? " active-item" : "");
-let opts = presets.map(p=><option value="${p.name}" ${p.name===it.presetName?"selected":""}>${p.name}</option>).join("");
-const tag = it.energyTag || "any";
-d.innerHTML = `
-
-${opts}
-
-<option value="any" ${tag==="any"?"selected":""}>Tag: Any
-<option value="chill" ${tag==="chill"?"selected":""}>Tag: Chill/Break
-<option value="build" ${tag==="build"?"selected":""}>Tag: Build
-<option value="drop" ${tag==="drop"?"selected":""}>Tag: Drop/High
-
-
-Duration(ms): 
-Play
-X
-`;
-container.appendChild(d);
-});
-}
-function addPlaylistRow(){
-if(presets.length===0) return alert("Create presets first");
-playlist.push({presetName:presets[0].name, duration:10000, energyTag:"any"});
-renderPlaylist();
-}
-async function savePlaylist(){
-await fetch(api("/playlist"), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(playlist)});
-alert("Smart Playlist Saved!");
-}
-async function loadPlaylist(){
-const r = await fetch(api("/playlist"));
-playlist = await r.json();
-renderPlaylist();
-}
-async function startPlaylist(){ await fetch(api("/playlistStart"), {method:"POST"}); }
-async function stopPlaylist(){ await fetch(api("/playlistStop"), {method:"POST"}); }
-async function skipNext(){ await fetch(api("/playlistSkip"), {method:"POST"}); loadState(); }
-async function jumpToIndex(idx){ await fetch(api("/playlistSkip?index="+idx), {method:"POST"}); loadState(); }
-async function loadState(){
-try {
-const controller = new AbortController();
-const tid = setTimeout(() => controller.abort(), 2500);
-const r = await fetch(api("/state"), { signal: controller.signal });
-clearTimeout(tid);
-const s = await r.json();
-document.getElementById('connStatus').innerText = "Connected";
-document.getElementById('connStatus').style.color = "#28a745";
-logMsg("Synced with Master ESP32 (" + api("") + ")");
-const idxChanged = (state.currentPlaylistIndex !== s.currentPlaylistIndex);
-state = s;
-document.getElementById('effect').value = state.effect;
-document.getElementById('brightness').value = state.brightness;
-document.getElementById('bval').innerText = state.brightness;
-document.getElementById('solidColor').value = rgbToHex(state.solidR,state.solidG,state.solidB);
-document.getElementById('rainbowSpeed').value = state.rainbowSpeed;
-document.getElementById('rval').innerText = state.rainbowSpeed;
-document.getElementById('propagationMode').checked = state.propagationMode || false;
-toggleSections();
-renderSteps();
-if (idxChanged) renderPlaylist();
-} catch (e) {
-document.getElementById('connStatus').innerText = "Disconnected";
-document.getElementById('connStatus').style.color = "#dc3545";
-logMsg("Fetch failed: " + e.name + " - " + e.message);
-}
-}
-async function loadAll(){
-await loadState();
-await loadPresets();
-await loadPlaylist();
-}
-// ===================== WEB AUDIO BEAT & ENERGY ENGINE =====================
-let audioCtx = null, analyser = null, micStream = null, micRunning = false;
-let energyHistory = [];
-let kickTimestamps = [];
-let lastKickTime = 0;
-let lastTagTriggerTime = 0;
-let currentEnergyZone = "any";
-let lastSentScale = 1.0;
-async function syncSmartFlags() {
-const smartOn = document.getElementById('smartJumpToggle').checked ? 1 : 0;
-fetch(api(/smart?smart=${smartOn}), {method:"POST"}).catch(()=>{});
-}
-async function toggleMic() {
-logMsg("Requesting microphone permission...");
-const btn = document.getElementById('micBtn');
-if (micRunning) {
-micRunning = false;
-if (micStream) micStream.getTracks().forEach(t => t.stop());
-if (audioCtx) audioCtx.close();
-btn.innerText = "Start Mic Listener";
-btn.className = "btn-green";
-document.getElementById('energyLabel').innerText = "IDLE";
-logMsg("Mic stopped.");
-return;
-}
-if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-logMsg("Error: navigator.mediaDevices unavailable (not HTTPS?)");
-return alert("Microphone API unavailable in this browser context.");
-}
-try {
-micStream = await navigator.mediaDevices.getUserMedia({
-audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-});
-audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const source = audioCtx.createMediaStreamSource(micStream);
-const filter = audioCtx.createBiquadFilter();
-filter.type = "lowpass";
-filter.frequency.value = 120;
-filter.Q.value = 1.2;
-analyser = audioCtx.createAnalyser();
-analyser.fftSize = 512;
-source.connect(filter);
-filter.connect(analyser);
-micRunning = true;
-btn.innerText = "Stop Mic Listener";
-btn.className = "btn-red";
-energyHistory = [];
-kickTimestamps = [];
-logMsg("Mic active! Listening for 120Hz kicks...");
-audioLoop();
-} catch (err) {
-logMsg("Mic error: " + err.name + " - " + err.message);
-alert("Mic permission denied or unavailable: " + err.message);
-}
-}
-function audioLoop() {
-if (!micRunning) return;
-requestAnimationFrame(audioLoop);
-const data = new Uint8Array(analyser.frequencyBinCount);
-analyser.getByteTimeDomainData(data);
-let sumSq = 0;
-for (let i = 0; i < data.length; i++) {
-const norm = (data[i] - 128) / 128;
-sumSq += norm * norm;
-}
-const rms = Math.sqrt(sumSq / data.length);
-energyHistory.push(rms);
-if (energyHistory.length > 360) energyHistory.shift();
-const avgEnergy = energyHistory.reduce((a, b) => a + b, 0) / energyHistory.length;
-const meterPct = Math.min(100, Math.round((rms / Math.max(0.02, avgEnergy * 2.2)) * 100));
-document.getElementById('bassMeter').style.width = meterPct + "%";
-const now = performance.now();
-const sensRatio = parseInt(document.getElementById('sensitivity').value) / 100;
-if (rms > 0.015 && rms > avgEnergy * sensRatio && (now - lastKickTime) > 260) {
-lastKickTime = now;
-kickTimestamps.push(now);
-if (kickTimestamps.length > 12) kickTimestamps.shift();
-if (kickTimestamps.length >= 4) {
-let intervals = [];
-for (let i = 1; i < kickTimestamps.length; i++) {
-const diff = kickTimestamps[i] - kickTimestamps[i - 1];
-if (diff >= 280 && diff <= 1000) intervals.push(diff);
-}
-if (intervals.length >= 3) {
-intervals.sort((a, b) => a - b);
-const medianMs = intervals[Math.floor(intervals.length / 2)];
-const bpm = Math.round(60000 / medianMs);
-document.getElementById('bpmVal').innerText = bpm;
-if (document.getElementById('autoTempoToggle').checked) {
-const baseBpm = parseInt(document.getElementById('baseBpm').value) || 128;
-const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
-if (Math.abs(scale - lastSentScale) >= 0.04) {
-lastSentScale = scale;
-document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
-fetch(api(/smart?scale=${scale.toFixed(2)}), {method:"POST"}).catch(()=>{});
-}
-}
-}
-}
-}
-if (energyHistory.length >= 120 && (now - lastTagTriggerTime) > 5000) {
-const recentAvg = energyHistory.slice(-60).reduce((a, b) => a + b, 0) / 60;
-let detectedZone = "build";
-if (recentAvg < avgEnergy * 0.72 || recentAvg < 0.012) {
-detectedZone = "chill";
-} else if (recentAvg > avgEnergy * 1.18) {
-detectedZone = "drop";
-}
-const labelEl = document.getElementById('energyLabel');
-labelEl.innerText = detectedZone.toUpperCase();
-labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
-if (detectedZone !== currentEnergyZone) {
-currentEnergyZone = detectedZone;
-if (document.getElementById('smartJumpToggle').checked) {
-lastTagTriggerTime = now;
-fetch(api(/smart?tag=${detectedZone}), {method:"POST"}).then(() => loadState()).catch(()=>{});
-}
-}
-}
-}
-setInterval(() => { if (document.visibilityState === 'visible') loadState(); }, 2500);
-loadAll();
+<script src="./app.js?v=5"></script>
+</body>
+</html>

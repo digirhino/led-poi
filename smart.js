@@ -1,3 +1,4 @@
+const ESP_HOST = 'http://192.168.4.1';
 let playlist = [];
 let presetsData = {};
 let currentPlaylistIdx = 0;
@@ -11,7 +12,12 @@ function logMsg(msg, isErr) {
 }
 
 function api(path) {
-  return document.getElementById('espHost').value.replace(/\/$/, '') + path;
+  return ESP_HOST + path;
+}
+
+function exitSmartMode() {
+  fetch(api('/smart?smart=0&scale=1.00'), { method: 'POST' })
+    .finally(() => { window.location.href = './index.html'; });
 }
 
 async function loadPresets() {
@@ -123,11 +129,16 @@ function renderPlaylist() {
 
 function fetchState() {
   fetch(api('/state')).then(r => r.json()).then(d => {
+    document.getElementById('statusDot').textContent = '● Connected';
+    document.getElementById('statusDot').style.color = '#28a745';
     if (!isEditing && currentPlaylistIdx !== d.currentPlaylistIndex) {
       currentPlaylistIdx = d.currentPlaylistIndex;
       renderPlaylist();
     }
-  }).catch(() => {});
+  }).catch(() => {
+    document.getElementById('statusDot').textContent = '● Offline';
+    document.getElementById('statusDot').style.color = '#dc3545';
+  });
 }
 
 // ===================== WEB AUDIO BEAT & ENERGY ENGINE =====================
@@ -135,29 +146,16 @@ let audioCtx = null, analyser = null, micStream = null, micRunning = false;
 let energyHistory = [], kickTimestamps = [];
 let lastKickTime = 0, lastTagTriggerTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
 
-function syncSmartFlags() {
-  const smartOn = document.getElementById('smartJumpToggle').checked ? 1 : 0;
-  fetch(api("/smart?smart=" + smartOn), { method: "POST" }).catch(() => {});
-}
-
-async function toggleMic() {
-  const btn = document.getElementById('micBtn');
-  if (micRunning) {
-    micRunning = false;
-    if (micStream) micStream.getTracks().forEach(t => t.stop());
-    if (audioCtx) audioCtx.close();
-    btn.innerText = "Start Mic Listener";
-    btn.className = "btn-green";
-    document.getElementById('energyLabel').innerText = "IDLE";
-    logMsg("Mic stopped.");
-    return;
-  }
-
+async function startMicAuto() {
+  if (micRunning) return;
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
     });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
     const source = audioCtx.createMediaStreamSource(micStream);
     const filter = audioCtx.createBiquadFilter();
     filter.type = "lowpass";
@@ -170,20 +168,23 @@ async function toggleMic() {
     filter.connect(analyser);
 
     micRunning = true;
-    btn.innerText = "Stop Mic Listener";
-    btn.className = "btn-red";
     energyHistory = [];
     kickTimestamps = [];
-    logMsg("Mic active! Listening for 120Hz kicks...");
+    logMsg("Mic active! Auto-switch & BPM scaling enabled.");
     audioLoop();
   } catch (err) {
-    logMsg("Mic error: " + err.name + " - " + err.message, true);
+    logMsg("Tap anywhere on screen to enable mic (" + err.name + ")", true);
+    document.body.addEventListener('click', () => { if (!micRunning) startMicAuto(); }, { once: true });
   }
 }
 
 function audioLoop() {
   if (!micRunning) return;
   requestAnimationFrame(audioLoop);
+
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
 
   const data = new Uint8Array(analyser.frequencyBinCount);
   analyser.getByteTimeDomainData(data);
@@ -205,6 +206,7 @@ function audioLoop() {
   const now = performance.now();
   const sensRatio = parseInt(document.getElementById('sensitivity').value) / 100;
 
+  // 1. Kick & Live BPM Scaling (Always Enabled)
   if (rms > 0.015 && rms > avgEnergy * sensRatio && (now - lastKickTime) > 260) {
     lastKickTime = now;
     kickTimestamps.push(now);
@@ -222,19 +224,18 @@ function audioLoop() {
         const bpm = Math.round(60000 / medianMs);
         document.getElementById('bpmVal').innerText = bpm;
 
-        if (document.getElementById('autoTempoToggle').checked) {
-          const baseBpm = parseInt(document.getElementById('baseBpm').value) || 128;
-          const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
-          if (Math.abs(scale - lastSentScale) >= 0.04) {
-            lastSentScale = scale;
-            document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
-            fetch(api("/smart?scale=" + scale.toFixed(2)), { method: "POST" }).catch(() => {});
-          }
+        const baseBpm = parseInt(document.getElementById('baseBpm').value) || 128;
+        const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
+        if (Math.abs(scale - lastSentScale) >= 0.04) {
+          lastSentScale = scale;
+          document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
+          fetch(api("/smart?scale=" + scale.toFixed(2)), { method: "POST" }).catch(() => {});
         }
       }
     }
   }
 
+  // 2. Auto-Switch Playlist by Energy (Always Enabled)
   if (energyHistory.length >= 120 && (now - lastTagTriggerTime) > 5000) {
     const recentAvg = energyHistory.slice(-60).reduce((a, b) => a + b, 0) / 60;
     let detectedZone = "build";
@@ -250,13 +251,14 @@ function audioLoop() {
 
     if (detectedZone !== currentEnergyZone) {
       currentEnergyZone = detectedZone;
-      if (document.getElementById('smartJumpToggle').checked) {
-        lastTagTriggerTime = now;
-        fetch(api("/smart?tag=" + detectedZone), { method: "POST" }).then(() => fetchState()).catch(() => {});
-      }
+      lastTagTriggerTime = now;
+      fetch(api("/smart?tag=" + detectedZone), { method: "POST" }).then(() => fetchState()).catch(() => {});
     }
   }
 }
 
+// Enable smart mode on ESP32, load playlist, and start mic automatically
+fetch(api('/smart?smart=1'), { method: 'POST' }).catch(() => {});
 loadPresets().then(() => { loadPlaylist(); });
+startMicAuto();
 setInterval(fetchState, 400);

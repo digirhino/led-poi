@@ -1,8 +1,10 @@
-const CACHE_NAME = 'ledpoi-pwa-v1';
+const CACHE_NAME = 'ledpoi-pwa-v2';
 const ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
 });
 
@@ -16,11 +18,16 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Never cache ESP32 local API calls; always let them hit 192.168.4.1
   if (e.request.url.includes('192.168.') || e.request.url.includes('led.local')) {
     return;
   }
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      caches.match('./index.html', { ignoreSearch: true }).then((cached) => cached || fetch(e.request))
+    );
+    return;
+  }
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request))
+    caches.match(e.request, { ignoreSearch: true }).then((cached) => cached || fetch(e.request))
   );
 });

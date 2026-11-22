@@ -221,7 +221,7 @@ let lastKickTime = 0, lastTagTriggerTime = 0, currentEnergyZone = "any", lastSen
 
 function syncSmartFlags() {
   const smartOn = document.getElementById('smartJumpToggle').checked ? 1 : 0;
-  fetch(api(`/smart?smart=${smartOn}`), {method:"POST"}).catch(()=>{});
+  fetch(api(/smart?smart=${smartOn}`), {method:"POST"}).catch(()=>{});
 }
 
 async function toggleMic() {

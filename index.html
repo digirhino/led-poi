@@ -66,8 +66,7 @@
       <span id="smartStatusDot" style="font-size:12px; color:#4da6ff;">&#9679; Smart Mode Active</span>
       <button class="step-btn" onclick="exitSmartMode()">&#10006;</button>
     </div>
-    <div class="panel" style="border-color: #4da6ff;">
-      <h3 style="margin:0 0 10px 0; color:#4da6ff;">Smart Audio Sync (Active)</h3>
+        <div class="panel" style="border-color: #4da6ff;">
       <div class="smart-row">
         <div>BPM: <strong id="bpmVal" style="font-size:18px; color:#4da6ff;">--</strong></div>
         <div>Energy: <strong id="energyLabel" style="color:#4da6ff;">LISTENING</strong></div>
@@ -92,8 +91,6 @@
   <!-- NORMAL CONTROL PANELS (Hidden when Smart Mode is active) -->
   <div id="normalPanels">
   <div class="panel">
-    <h3>Master Control</h3>
-
     <div style="text-align:center; margin-bottom:10px; font-size:12px;">
       <span id="statusDot" style="color:#ffc107;">● Connecting</span>
     </div>
@@ -118,8 +115,8 @@
   </div>
   </div>
 
-  <div class="panel">
-    <h3 id="playlistPanelTitle">Presets & Playlist</h3>
+    <div class="panel">
+    <h3 id="playlistPanelTitle" style="display:none;">Presets & Playlist</h3>
     <div id="presetControls">
       <select id="presetList" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #444;"></select>
       <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">

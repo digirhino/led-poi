@@ -36,7 +36,11 @@
   .smart-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .smart-tile { position: relative; background: #252525; border: 2px solid #444; border-radius: 10px; padding: 12px 6px; text-align: center; cursor: pointer; user-select: none; min-height: 55px; font-size: 13px; display: flex; flex-direction: column; justify-content: center; align-items: center; word-break: break-word; }
   .tag-pill { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(0,0,0,0.65); padding: 2px 7px; border-radius: 10px; margin-top: 6px; border: 1px solid rgba(255,255,255,0.2); }
+  .filter-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
+  .filter-btn { flex: 1; padding: 6px 4px; font-size: 12px; font-weight: bold; background: #252525; border: 1px solid #444; border-radius: 6px; color: #aaa; }
+  .filter-btn.active { background: #1a426e; border-color: #4da6ff; color: #fff; }
 </style>
+
 
 </head>
 <body>
@@ -74,10 +78,16 @@
         <label>Base BPM: <input type="number" id="baseBpm" value="128" min="60" max="200"></label>
         <label>Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="122"></label>
       </div>
-      <div id="debugLog" style="display:none;">Initializing microphone...</div>
+           <div id="debugLog" style="display:none;">Initializing microphone...</div>
     </div>
-
+    <div class="filter-bar">
+      <button id="filt-all" class="filter-btn active" onclick="setSmartFilter('all')">ALL</button>
+      <button id="filt-chill" class="filter-btn" onclick="setSmartFilter('chill')">CHILL</button>
+      <button id="filt-build" class="filter-btn" onclick="setSmartFilter('build')">BUILD</button>
+      <button id="filt-drop" class="filter-btn" onclick="setSmartFilter('drop')">DROP</button>
+    </div>
   </div>
+
 
   <!-- NORMAL CONTROL PANELS (Hidden when Smart Mode is active) -->
   <div id="normalPanels">
@@ -250,8 +260,14 @@ function renderPlaylist() {
     container.className = '';
   }
 
-  playlist.forEach((item, index) => {
+    playlist.forEach((item, index) => {
+    const itemTag = (item.energyTag || 'any').toLowerCase();
+    if (smartActive && smartFilter !== 'all' && itemTag !== smartFilter && itemTag !== 'any') {
+      return;
+    }
+
     const row = document.createElement('div');
+
     row.className = smartActive ? 'smart-tile' : 'playlistItem';
     if (index === currentPlaylistIdx) row.classList.add('active-item');
 
@@ -513,6 +529,50 @@ function fetchState(){
 }
 // ===================== SMART MODE & WEB AUDIO ENGINE =====================
 let smartActive = false;
+let smartFilter = 'all';
+
+function setSmartFilter(tag) {
+  smartFilter = tag;
+  ['all', 'chill', 'build', 'drop'].forEach(t => {
+    const btn = document.getElementById('filt-' + t);
+    if (btn) btn.className = 'filter-btn' + (t === tag ? ' active' : '');
+  });
+  renderPlaylist();
+  if (smartActive) {
+    triggerSmartShuffle(tag === 'all' ? currentEnergyZone : tag);
+  }
+}
+
+function triggerSmartShuffle(targetZone) {
+  const activePool = (smartFilter !== 'all') ? smartFilter : targetZone;
+  // Find all playlist indices matching the target energy pool
+  let candidates = [];
+  playlist.forEach((item, idx) => {
+    const t = (item.energyTag || 'any').toLowerCase();
+    if (t === activePool || t === 'any') candidates.push(idx);
+  });
+
+  // Fallback to all items if no presets have that tag
+  if (candidates.length === 0) {
+    candidates = playlist.map((_, idx) => idx);
+  }
+  if (candidates.length === 0) return;
+
+  // Avoid picking the exact same preset twice in a row if alternatives exist
+  let filtered = candidates.filter(idx => idx !== currentPlaylistIdx);
+  if (filtered.length === 0) filtered = candidates;
+
+  const chosenIdx = filtered[Math.floor(Math.random() * filtered.length)];
+  fetch('/playlistSkip?index=' + chosenIdx, { method: 'POST' })
+    .then(r => {
+      if (r.ok) {
+        currentPlaylistIdx = chosenIdx;
+        renderPlaylist();
+      }
+    })
+    .catch(() => {});
+}
+
 let wakeLock = null;
 let audioCtx = null, analyser = null, micStream = null, micRunning = false;
 let energyHistory = [], kickTimestamps = [];
@@ -690,18 +750,19 @@ function audioLoop() {
     labelEl.innerText = detectedZone.toUpperCase();
     labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
 
-    const sameZoneHoldMs = 12000; // Rotate to another matching preset after 12 seconds
+    // Dynamic shuffle pacing: faster during drops (~6s), medium on builds (~10s), relaxed on chill (~16s)
+    const dynamicHoldMs = (detectedZone === 'drop') ? 6000 : ((detectedZone === 'build') ? 10000 : 16000);
+
     if (detectedZone !== currentEnergyZone) {
       currentEnergyZone = detectedZone;
       lastTagTriggerTime = now;
       lastPresetSwitchTime = now;
-      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => safeFetchState()).catch(() => {});
-    } else if ((now - lastPresetSwitchTime) > sameZoneHoldMs) {
+      triggerSmartShuffle(detectedZone);
+    } else if ((now - lastPresetSwitchTime) > dynamicHoldMs) {
       lastTagTriggerTime = now;
       lastPresetSwitchTime = now;
-      fetch("/smart?tag=" + detectedZone, { method: "POST" }).then(() => safeFetchState()).catch(() => {});
+      triggerSmartShuffle(detectedZone);
     }
-
   }
 }
 

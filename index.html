@@ -502,8 +502,19 @@ function exportPreset(){
 async function loadPlaylist(){ const r=await fetch('/playlist'); playlist=await r.json(); renderPlaylist(); }
 function addPlaylistItem(){ const d=parseInt(prompt('Duration (ms):')); if(!document.getElementById('presetList').value||!d) return; playlist.push({presetName:document.getElementById('presetList').value,duration:d}); renderPlaylist(); savePlaylist(); }
 function savePlaylist(){ fetch('/playlist',{ method:'POST', body:JSON.stringify(playlist) }); }
-function playlistStart(){ fetch('/playlistStart',{method:'POST'}); }
-function playlistStop(){ fetch('/playlistStop',{method:'POST'}); }
+let smartPaused = false;
+
+function playlistStart() {
+  smartPaused = false;
+  lastPresetSwitchTime = performance.now();
+  fetch('/playlistStart', { method: 'POST' });
+}
+
+function playlistStop() {
+  smartPaused = true;
+  fetch('/playlistStop', { method: 'POST' });
+}
+
 
 function fetchState(){ 
     fetch('/state').then(r=>r.json()).then(d=>{ 
@@ -538,7 +549,7 @@ function setSmartFilter(tag) {
     if (btn) btn.className = 'filter-btn' + (t === tag ? ' active' : '');
   });
   renderPlaylist();
-  if (smartActive) {
+  if (smartActive && !smartPaused) {
     triggerSmartShuffle(tag === 'all' ? currentEnergyZone : tag);
   }
 }
@@ -610,6 +621,7 @@ function logSmart(msg, isErr) {
 
 async function enterSmartMode() {
   smartActive = true;
+  smartPaused = true;
   lastPresetSwitchTime = performance.now();
   requestWakeLock();
   renderPlaylist();
@@ -750,10 +762,16 @@ function audioLoop() {
     labelEl.innerText = detectedZone.toUpperCase();
     labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
 
+        if (smartPaused) {
+      currentEnergyZone = detectedZone;
+      return;
+    }
+
     // Dynamic shuffle pacing: faster during drops (~6s), medium on builds (~10s), relaxed on chill (~16s)
     const dynamicHoldMs = (detectedZone === 'drop') ? 6000 : ((detectedZone === 'build') ? 10000 : 16000);
 
     if (detectedZone !== currentEnergyZone) {
+
       currentEnergyZone = detectedZone;
       lastTagTriggerTime = now;
       lastPresetSwitchTime = now;

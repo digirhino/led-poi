@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED Poi Master Control</title>
+<link rel="manifest" href="./manifest.json">
+<style>
+
+  body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+  #page { width: 100%; max-width: 500px; }
+  .panel { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+  .panel h3, .panel h4 { margin-top: 0; text-align: center; color: #4da6ff; }
+  .topColumns { display: flex; gap: 15px; justify-content: space-between; }
+  .column { flex: 1; text-align: center; }
+  input[type="range"] { width: 100%; cursor: pointer; }
+  input[type="color"] { display: none; }
+  button { background: #333; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; margin: 4px; transition: 0.2s; }
+  button:hover { background: #444; }
+  button:active { background: #1a426e; }
+  
+  .rainbow-btn.active { background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff); animation: rainbow-anim 3s ease infinite; color: white; }
+  @keyframes rainbow-anim { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+  .step, .playlistItem { position: relative; background: #252525; border: 1px solid #444; padding: 10px; margin: 6px 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 8px; }
+  .step input[type="number"], .playlistItem input[type="number"] { width: 45px; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px; }
+  .step-btn { background: rgba(0,0,0,0.3); color: #fff; border: 1px solid #555; border-radius: 3px; padding: 4px 8px; cursor: pointer; font-size: 14px; margin: 0; }
+  .step-btn:hover { background: rgba(255,255,255,0.1); }
+  
+  .active-item { border: 2px solid #4da6ff !important; box-shadow: 0 0 10px #4da6ff; }
+  .smart-btn { background: #1a426e; border: 1px solid #4da6ff; font-weight: bold; }
+  .meter-bg { width: 100%; height: 14px; background: #2a2a2a; border-radius: 7px; overflow: hidden; margin: 8px 0; }
+  .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); transition: width 0.05s linear; }
+  .smart-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+  #debugLog { font-family: monospace; font-size: 11px; color: #0f0; background: #000; padding: 6px; border-radius: 4px; margin-top: 8px; }
+  .smart-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .smart-tile { position: relative; background: #252525; border: 2px solid #444; border-radius: 10px; padding: 12px 6px; text-align: center; cursor: pointer; user-select: none; min-height: 55px; font-size: 13px; display: flex; flex-direction: column; justify-content: center; align-items: center; word-break: break-word; }
+  .tag-pill { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(0,0,0,0.65); padding: 2px 7px; border-radius: 10px; margin-top: 6px; border: 1px solid rgba(255,255,255,0.2); }
+  .filter-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
+  .filter-btn { flex: 1; padding: 6px 4px; font-size: 12px; font-weight: bold; background: #252525; border: 1px solid #444; border-radius: 6px; color: #aaa; }
+  .filter-btn.active { background: #1a426e; border-color: #4da6ff; color: #fff; }
+</style>
+
+
+</head>
+<body>
+<div id="page">
+  <!-- CONNECT SPLASH SCREEN (Shown until ESP32 responds) -->
+  <div id="connectScreen" class="panel" style="text-align:center; padding:30px 15px; margin-top:40px;">
+    <h2 style="color:#4da6ff; margin-top:0;">LED Poi Controller</h2>
+    <p id="connectMsg" style="color:#aaa; font-size:14px; margin-bottom:20px;">
+      Connect your Wi-Fi to <strong>LEDPoi</strong> to begin.
+    </p>
+    <button onclick="openWifiSettings()" style="background:#1a426e; border:1px solid #4da6ff; padding:12px 20px; font-size:16px; font-weight:bold; width:100%;">
+      Connect to LEDPoi Wi-Fi
+    </button>
+
+  </div>
+
+  <!-- MAIN INTERFACE (Hidden until connected) -->
+  <div id="mainUI" style="display:none;">
+
+  <!-- SMART MODE HEADER & AUDIO PANEL (Hidden until Smart Playlist is clicked) -->
+  <div id="smartPanel" style="display:none;">
+    <div class="smart-row" style="margin-bottom: 10px;">
+      <span id="smartStatusDot" style="font-size:12px; color:#4da6ff;">&#9679; Smart Mode Active</span>
+      <button class="step-btn" onclick="exitSmartMode()">&#10006;</button>
+    </div>
+        <div class="panel" style="border-color: #4da6ff;">
+      <div class="smart-row">
+        <div>BPM: <strong id="bpmVal" style="font-size:18px; color:#4da6ff;">--</strong></div>
+        <div>Energy: <strong id="energyLabel" style="color:#4da6ff;">LISTENING</strong></div>
+        <div style="display:none;">Scale: <strong id="scaleVal">1.00x</strong></div>
+      </div>
+      <div class="meter-bg"><div id="bassMeter" class="meter-fill"></div></div>
+      <div class="smart-row" style="display:none;">
+        <label>Base BPM: <input type="number" id="baseBpm" value="128" min="60" max="200"></label>
+        <label>Sensitivity: <input type="range" id="sensitivity" min="115" max="180" value="122"></label>
+      </div>
+           <div id="debugLog" style="display:none;">Initializing microphone...</div>
+    </div>
+    <div class="filter-bar">
+      <button id="filt-all" class="filter-btn active" onclick="setSmartFilter('all')">ALL</button>
+      <button id="filt-chill" class="filter-btn" onclick="setSmartFilter('chill')">CHILL</button>
+      <button id="filt-build" class="filter-btn" onclick="setSmartFilter('build')">BUILD</button>
+      <button id="filt-drop" class="filter-btn" onclick="setSmartFilter('drop')">DROP</button>
+    </div>
+  </div>
+
+
+  <!-- NORMAL CONTROL PANELS (Hidden when Smart Mode is active) -->
+  <div id="normalPanels">
+  <div class="panel">
+    <div style="text-align:center; margin-bottom:10px; font-size:12px;">
+      <span id="statusDot" style="color:#ffc107;">● Connecting</span>
+    </div>
+    <div class="topColumns">
+      <div class="column">Brightness<br><input type="range" id="brightness" min="1" max="255" onchange="apply(currentEffect)"></div>
+      <div class="column">Rainbow Speed<br><input type="range" id="rainbowSpeed" min="200" max="255" onchange="apply(currentEffect)"></div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+      <input type="color" id="solidColorInput">
+      <button id="solidColorBtn" style="width:100%;">Solid Colour</button>
+      <button id="rainbowBtn" class="rainbow-btn" style="width:100%;">Rainbow Mode</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h4>Sequencer</h4>
+    <div style="text-align:center; margin-bottom:10px;">
+      <label><input type="checkbox" id="propagationMode" onchange="apply(currentEffect)"> Propagation Chase</label>
+    </div>
+    <div id="steps"></div>
+    <button onclick="addStep()" style="width:100%;">+ Add Step</button>
+  </div>
+  </div>
+
+    <div class="panel">
+    <h3 id="playlistPanelTitle" style="display:none;">Presets & Playlist</h3>
+    <div id="presetControls">
+      <select id="presetList" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #444;"></select>
+      <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
+        <button onclick="applyPreset()">Apply</button>
+        <button onclick="savePreset()">Save</button>
+        <button onclick="deletePreset()">Delete</button>
+        <button onclick="exportPreset()">Export</button>
+        <input type="file" id="importPresetFile" style="display:none" onchange="importPreset()">
+        <button onclick="document.getElementById('importPresetFile').click()">Import</button>
+      </div>
+      <button onclick="addPlaylistItem()" style="width:100%; margin-top:8px;">Add to Playlist</button>
+      <div style="margin-top:10px; border-top:1px solid #444; padding-top:10px; display:flex; justify-content:center; flex-wrap:wrap;">
+        <input type="file" id="importPlaylistFile" style="display:none" onchange="importPlaylist()">
+        <button onclick="document.getElementById('importPlaylistFile').click()">Import Playlist</button>
+        <button onclick="exportPlaylist()">Export Playlist</button>
+        <button class="smart-btn" onclick="enterSmartMode()">Smart Playlist</button>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <div id="playlistSteps" style="margin-top:10px;"></div>
+
+      <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
+        <button onclick="playlistStart()">Play</button>
+        <button onclick="playlistStop()">Pause</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+<script>
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+const ESP_HOST = 'http://192.168.4.1';
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+  if (typeof url === 'string' && url.startsWith('/')) {
+    url = ESP_HOST + url;
+  }
+  return _origFetch.call(this, url, opts);
+};
+
+let sequencerSteps = [];
+let currentEffect = 0;
+let playlist = [];
+let presetsData = {};
+let currentPlaylistIdx = 0;
+let isEditing = false; 
+let isSaving = false;
+
+function rgbToHex(r, g, b) { return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
+function hexToRgb(h) { const x = parseInt(h.slice(1), 16); return { r: (x >> 16) & 255, g: (x >> 8) & 255, b: x & 255 }; }
+
+const colorInput = document.getElementById('solidColorInput');
+const colorBtn = document.getElementById('solidColorBtn');
+const rainbowBtn = document.getElementById('rainbowBtn');
+
+// Added listener
+addEditListeners(colorInput);
+
+colorBtn.onclick = () => colorInput.click();
+colorInput.onchange = (e) => { colorBtn.style.backgroundColor = e.target.value; apply(0); };
+rainbowBtn.onclick = () => { currentEffect = (currentEffect === 1) ? 0 : 1; apply(currentEffect); };
+
+function addEditListeners(el) {
+  el.onfocus = () => { isEditing = true; };
+  el.onblur = () => { isEditing = false; };
+  if (el.tagName === 'SELECT') {
+    el.onmousedown = () => { isEditing = true; };
+    el.ontouchstart = () => { isEditing = true; };
+  }
+  if (el.type === 'color') {
+    el.onclick = () => { isEditing = true; };
+    el.onchange = () => { isEditing = false; };
+  }
+}
+
+
+function renderSequencer() {
+  const container = document.getElementById('steps');
+  container.innerHTML = '';
+  sequencerSteps.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'step';
+    div.style.backgroundColor = rgbToHex(s.r, s.g, s.b);
+    const picker = document.createElement('input');
+    picker.type = 'color';
+    picker.value = rgbToHex(s.r, s.g, s.b);
+    addEditListeners(picker);
+    picker.onchange = (e) => {
+      const c = hexToRgb(e.target.value);
+      s.r = c.r; s.g = c.g; s.b = c.b;
+      div.style.backgroundColor = e.target.value;
+      apply(2);
+    };
+    div.onclick = (e) => { if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') picker.click(); };
+    const createInput = (val, key, w) => {
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.value = val; inp.style.width = w;
+      addEditListeners(inp);
+      inp.onclick = (e) => e.stopPropagation();
+      inp.onchange = (e) => { 
+        s[key] = parseInt(e.target.value); 
+        if(key === 'r' || key === 'g' || key === 'b') div.style.backgroundColor = rgbToHex(s.r, s.g, s.b);
+        apply(2);
+      };
+      return inp;
+    };
+    div.appendChild(picker);
+    div.appendChild(createInput(s.r, 'r', '25px'));
+    div.appendChild(createInput(s.g, 'g', '25px'));
+    div.appendChild(createInput(s.b, 'b', '25px'));
+    div.appendChild(createInput(s.duration, 'duration', '50px'));
+    div.appendChild(createInput(s.fadeDuration, 'fadeDuration', '50px'));
+    
+    const upBtn = document.createElement('button'); upBtn.innerHTML = '&#8593;'; upBtn.className = 'step-btn';
+    upBtn.onclick = (e) => { e.stopPropagation(); [sequencerSteps[i-1], sequencerSteps[i]] = [sequencerSteps[i], sequencerSteps[i-1]]; renderSequencer(); apply(2); };
+    const downBtn = document.createElement('button'); downBtn.innerHTML = '&#8595;'; downBtn.className = 'step-btn';
+    downBtn.onclick = (e) => { e.stopPropagation(); [sequencerSteps[i+1], sequencerSteps[i]] = [sequencerSteps[i], sequencerSteps[i+1]]; renderSequencer(); apply(2); };
+    const delBtn = document.createElement('button'); delBtn.innerHTML = '&#10006;'; delBtn.className = 'step-btn';
+    delBtn.onclick = (e) => { e.stopPropagation(); sequencerSteps.splice(i, 1); renderSequencer(); apply(2); };
+    div.appendChild(upBtn); div.appendChild(downBtn); div.appendChild(delBtn);
+    container.appendChild(div);
+  });
+}
+
+function renderPlaylist() {
+  const container = document.getElementById('playlistSteps');
+  container.innerHTML = '';
+
+  // Toggle grid layout when in Smart Mode
+  if (smartActive) {
+    container.className = 'smart-grid';
+  } else {
+    container.className = '';
+  }
+
+    playlist.forEach((item, index) => {
+    const itemTag = (item.energyTag || 'any').toLowerCase();
+    if (smartActive && smartFilter !== 'all' && itemTag !== smartFilter && itemTag !== 'any') {
+      return;
+    }
+
+    const row = document.createElement('div');
+
+    row.className = smartActive ? 'smart-tile' : 'playlistItem';
+    if (index === currentPlaylistIdx) row.classList.add('active-item');
+
+    // Apply preset color gradient background in both modes
+    if (presetsData[item.presetName] && presetsData[item.presetName].steps) {
+      const steps = presetsData[item.presetName].steps;
+      let total = 0;
+      steps.forEach(s => total += (s.duration + s.fadeDuration));
+      if (total > 0) {
+        let stops = [];
+        let pos = 0;
+        steps.forEach(s => {
+          let start = (pos / total) * 100;
+          let end = ((pos + s.duration + s.fadeDuration) / total) * 100;
+          stops.push("rgb(" + s.r + "," + s.g + "," + s.b + ") " + start + "% " + end + "%");
+          pos += (s.duration + s.fadeDuration);
+        });
+        row.style.background = "linear-gradient(to right, " + stops.join(', ') + ")";
+      }
+    }
+
+    const label = document.createElement('span');
+    label.textContent = item.presetName;
+    label.style.fontWeight = 'bold';
+    label.style.textShadow = '1px 1px 3px #000';
+    row.appendChild(label);
+
+    // Double-tap to force skip in both modes
+    row.ondblclick = () => {
+      fetch('/playlistSkip?index=' + index, { method: 'POST' })
+        .then(response => {
+          if (response.ok) {
+            currentPlaylistIdx = index;
+            renderPlaylist();
+          }
+        })
+        .catch(err => console.error("Failed to skip playlist item:", err));
+    };
+
+    // SMART MODE: Clean visual tile with energy pill only (no inputs/arrows)
+    if (smartActive) {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.textContent = (item.energyTag || 'any').toUpperCase();
+      row.appendChild(pill);
+      container.appendChild(row);
+      return;
+    }
+
+    // NORMAL MODE: Full editor controls
+    label.style.margin = '0 6px';
+
+    const tagSel = document.createElement('select');
+    tagSel.style.cssText = 'background:rgba(0,0,0,0.5); color:#fff; border:1px solid #555; padding:4px; border-radius:3px; font-size:12px;';
+    addEditListeners(tagSel);
+    const tags = [
+      { val: 'any', text: 'Any' },
+      { val: 'chill', text: 'Chill' },
+      { val: 'build', text: 'Build' },
+      { val: 'drop', text: 'Drop' }
+    ];
+    tags.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.val;
+      opt.textContent = t.text;
+      if ((item.energyTag || 'any') === t.val) opt.selected = true;
+      tagSel.appendChild(opt);
+    });
+    tagSel.onclick = (e) => e.stopPropagation();
+    tagSel.onchange = (e) => { isEditing = false; item.energyTag = e.target.value; savePlaylist(); };
+    row.appendChild(tagSel);
+
+    const durInput = document.createElement('input');
+    durInput.type = 'number';
+    durInput.value = item.duration;
+    durInput.style.width = '70px';
+    addEditListeners(durInput);
+    durInput.onchange = (e) => { item.duration = parseInt(e.target.value); savePlaylist(); };
+    row.appendChild(durInput);
+
+    const upBtn = document.createElement('button'); upBtn.innerHTML = '&#8593;'; upBtn.className = 'step-btn';
+    upBtn.onclick = () => { if (index > 0) { [playlist[index-1], playlist[index]] = [playlist[index], playlist[index-1]]; renderPlaylist(); savePlaylist(); } };
+    const downBtn = document.createElement('button'); downBtn.innerHTML = '&#8595;'; downBtn.className = 'step-btn';
+    downBtn.onclick = () => { if (index < playlist.length - 1) { [playlist[index+1], playlist[index]] = [playlist[index], playlist[index+1]]; renderPlaylist(); savePlaylist(); } };
+    const delBtn = document.createElement('button'); delBtn.innerHTML = '&#10006;'; delBtn.className = 'step-btn';
+    delBtn.onclick = () => { playlist.splice(index, 1); renderPlaylist(); savePlaylist(); };
+
+    row.appendChild(upBtn); row.appendChild(downBtn); row.appendChild(delBtn);
+    container.appendChild(row);
+  });
+}
+
+
+async function apply(effect) {
+    isSaving = true;
+    const payload = {
+        effect: effect,
+        brightness: parseInt(document.getElementById('brightness').value),
+        rainbowSpeed: 256 - parseInt(document.getElementById('rainbowSpeed').value),
+        solidR: hexToRgb(colorInput.value).r,
+        solidG: hexToRgb(colorInput.value).g,
+        solidB: hexToRgb(colorInput.value).b,
+        propagationMode: document.getElementById('propagationMode').checked,
+        sequencerSteps: sequencerSteps
+    };
+    await fetch('/state', { method: 'POST', body: JSON.stringify(payload) });
+    await fetch('/apply', { method: 'POST' });
+    if(effect === 1) rainbowBtn.classList.add('active'); else rainbowBtn.classList.remove('active');
+    isSaving = false;
+}
+
+function addStep() { sequencerSteps.push({r:255,g:0,b:0,duration:500,fadeDuration:100}); renderSequencer(); apply(2); }
+
+function importPreset() {
+  const fileInput = document.getElementById('importPresetFile');
+  const file = fileInput.files[0];
+  if (!file) return;
+  const defaultPresetName = file.name.replace(/\.json$/i, '');
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    let state;
+    try {
+      state = JSON.parse(e.target.result);
+    } catch (err) {
+      alert("Failed to parse preset file: " + err.message);
+      return;
+    }
+
+    isSaving = true;
+
+    if (state.sequencerSteps) {
+      sequencerSteps = state.sequencerSteps;
+      renderSequencer();
+    }
+
+    try {
+      await fetch('/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state)
+      });
+      await fetch('/apply', { method: 'POST' });
+    } catch (err) {
+      console.error("Failed to push imported state payload to hardware:", err);
+    }
+
+    fetchState();
+
+    const presetName = prompt('Enter a name for the imported preset:', defaultPresetName);
+    if (presetName && presetName.trim() !== "") {
+
+      await fetch('/savePreset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: presetName.trim() })
+      });
+      
+      loadPresets();
+      alert(`Preset "${presetName}" imported and saved successfully!`);
+    }
+
+    isSaving = false;
+    
+    document.getElementById('importPresetFile').value = '';
+  };
+
+  reader.readAsText(file);
+}
+
+
+async function exportPlaylist() {
+    if (!playlist || playlist.length === 0) { alert("Playlist is empty"); return; }
+    const exportData = [];
+    for (const item of playlist) {
+        await fetch('/applyPreset?name=' + encodeURIComponent(item.presetName));
+        const state = await fetch('/state');
+        const presetState = await state.json();
+    exportData.push({ duration: item.duration, energyTag: item.energyTag || 'any', preset: { name: item.presetName, state: presetState } });
+    }
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'playlist.json'; a.click();
+}
+
+function importPlaylist() {
+  const file = document.getElementById('importPlaylistFile').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    let imported;
+    try { imported = JSON.parse(e.target.result); if (!Array.isArray(imported)) throw new Error("Invalid format"); }
+    catch (err) { alert("Failed to import playlist: " + err.message); return; }
+    processImportedPlaylist(imported);
+  };
+  reader.readAsText(file);
+}
+
+async function processImportedPlaylist(imported) {
+  for (const item of imported) {
+    if (!item.preset || typeof item.duration !== "number") continue;
+    await fetch('/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item.preset.state) });
+    await fetch('/apply', { method: 'POST' });
+    await fetch('/savePreset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.preset.name }) });
+    playlist.push({ presetName: item.preset.name, duration: item.duration, energyTag: item.energyTag || 'any' });
+  }
+  renderPlaylist(); savePlaylist(); loadPresets();
+}
+
+async function loadPresets(){ 
+    const r=await fetch('/getPresets'); 
+    const a=await r.json(); 
+    const plist = document.getElementById('presetList'); 
+    plist.innerHTML=''; 
+    presetsData = {}; 
+    a.forEach(p=>{ 
+        presetsData[p.name] = p; 
+        const o=document.createElement('option'); 
+        o.value=o.text=p.name; 
+        plist.add(o); 
+    }); 
+}
+
+function savePreset(){ const n=prompt('Preset name:'); if(!n) return; fetch('/savePreset',{method:'POST',body:JSON.stringify({name:n})}).then(loadPresets); }
+function applyPreset(){ fetch('/applyPreset?name='+encodeURIComponent(document.getElementById('presetList').value)).then(fetchState); }
+function deletePreset(){ fetch('/deletePreset?name='+encodeURIComponent(document.getElementById('presetList').value)).then(() => { loadPresets(); loadPlaylist(); }); }
+function exportPreset(){ 
+    const name = document.getElementById('presetList').value;
+    if(!name) { alert("Select a preset first"); return; }
+    fetch('/state').then(r=>r.json()).then(d=>{
+        const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'})); a.download=name+'.json'; a.click();
+    });
+}
+async function loadPlaylist(){ const r=await fetch('/playlist'); playlist=await r.json(); renderPlaylist(); }
+function addPlaylistItem(){ const d=parseInt(prompt('Duration (ms):')); if(!document.getElementById('presetList').value||!d) return; playlist.push({presetName:document.getElementById('presetList').value,duration:d}); renderPlaylist(); savePlaylist(); }
+function savePlaylist(){ fetch('/playlist',{ method:'POST', body:JSON.stringify(playlist) }); }
+let smartPaused = false;
+
+function playlistStart() {
+  smartPaused = false;
+  lastPresetSwitchTime = performance.now();
+  fetch('/playlistStart', { method: 'POST' });
+}
+
+function playlistStop() {
+  smartPaused = true;
+  fetch('/playlistStop', { method: 'POST' });
+}
+
+
+function fetchState(){ 
+    fetch('/state').then(r=>r.json()).then(d=>{ 
+        document.getElementById('statusDot').textContent = '● Connected';
+        document.getElementById('statusDot').style.color = '#4da6ff';
+
+        document.getElementById('brightness').value = d.brightness; 
+        document.getElementById('rainbowSpeed').value = 256 - d.rainbowSpeed; 
+        document.getElementById('propagationMode').checked = d.propagationMode; 
+        
+        currentEffect = d.effect; 
+        if(currentEffect === 1) rainbowBtn.classList.add('active'); else rainbowBtn.classList.remove('active'); 
+        
+        if (!isEditing && !isSaving) {
+            colorInput.value = rgbToHex(d.solidR, d.solidG, d.solidB); 
+            colorBtn.style.backgroundColor = colorInput.value; 
+            sequencerSteps = d.sequencerSteps;
+            currentPlaylistIdx = d.currentPlaylistIndex;
+            renderSequencer(); 
+            renderPlaylist(); 
+        }
+    }); 
+}
+// ===================== SMART MODE & WEB AUDIO ENGINE =====================
+let smartActive = false;
+let smartFilter = 'all';
+
+function setSmartFilter(tag) {
+  smartFilter = tag;
+  ['all', 'chill', 'build', 'drop'].forEach(t => {
+    const btn = document.getElementById('filt-' + t);
+    if (btn) btn.className = 'filter-btn' + (t === tag ? ' active' : '');
+  });
+  renderPlaylist();
+  if (smartActive && !smartPaused) {
+    triggerSmartShuffle(tag === 'all' ? currentEnergyZone : tag);
+  }
+}
+
+function triggerSmartShuffle(targetZone) {
+  const activePool = (smartFilter !== 'all') ? smartFilter : targetZone;
+  // Find all playlist indices matching the target energy pool
+  let candidates = [];
+  playlist.forEach((item, idx) => {
+    const t = (item.energyTag || 'any').toLowerCase();
+    if (t === activePool || t === 'any') candidates.push(idx);
+  });
+
+  // Fallback to all items if no presets have that tag
+  if (candidates.length === 0) {
+    candidates = playlist.map((_, idx) => idx);
+  }
+  if (candidates.length === 0) return;
+
+  // Avoid picking the exact same preset twice in a row if alternatives exist
+  let filtered = candidates.filter(idx => idx !== currentPlaylistIdx);
+  if (filtered.length === 0) filtered = candidates;
+
+  const chosenIdx = filtered[Math.floor(Math.random() * filtered.length)];
+  fetch('/playlistSkip?index=' + chosenIdx, { method: 'POST' })
+    .then(r => {
+      if (r.ok) {
+        currentPlaylistIdx = chosenIdx;
+        renderPlaylist();
+      }
+    })
+    .catch(() => {});
+}
+
+let wakeLock = null;
+let audioCtx = null, analyser = null, micStream = null, micRunning = false;
+let energyHistory = [], kickTimestamps = [];
+let peakEnergy = 0.03;
+let lastKickTime = 0, lastTagTriggerTime = 0, lastPresetSwitchTime = 0, currentEnergyZone = "any", lastSentScale = 1.0;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && smartActive) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && smartActive) {
+    requestWakeLock();
+  }
+});
+
+
+function logSmart(msg, isErr) {
+  const el = document.getElementById('debugLog');
+  if (!el) return;
+  el.style.color = isErr ? '#ff4444' : '#0f0';
+  el.innerText = msg;
+}
+
+async function enterSmartMode() {
+  smartActive = true;
+  smartPaused = true;
+  lastPresetSwitchTime = performance.now();
+  requestWakeLock();
+  renderPlaylist();
+  document.getElementById('normalPanels').style.display = 'none';
+  document.getElementById('presetControls').style.display = 'none';
+  document.getElementById('smartPanel').style.display = 'block';
+  document.getElementById('playlistPanelTitle').textContent = 'Smart Playlist Viewer';
+
+  fetch('/smart?smart=1', { method: 'POST' }).catch(() => {});
+
+  if (micRunning) return;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 120;
+    filter.Q.value = 1.2;
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(filter);
+    filter.connect(analyser);
+
+    micRunning = true;
+    energyHistory = [];
+    peakEnergy = 0.03;
+    kickTimestamps = [];
+    logSmart("Mic active! Auto-switch & BPM scaling enabled.");
+    audioLoop();
+  } catch (err) {
+    logSmart("Mic blocked: " + err.name + " - " + err.message, true);
+  }
+}
+
+function exitSmartMode() {
+  smartActive = false;
+  releaseWakeLock();
+  renderPlaylist();
+  if (micRunning) {
+    micRunning = false;
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close();
+  }
+  document.getElementById('smartPanel').style.display = 'none';
+  document.getElementById('normalPanels').style.display = 'block';
+  document.getElementById('presetControls').style.display = 'block';
+  document.getElementById('playlistPanelTitle').textContent = 'Presets & Playlist';
+
+  fetch('/smart?smart=0&scale=1.00', { method: 'POST' }).catch(() => {});
+}
+
+function audioLoop() {
+  if (!micRunning) return;
+  requestAnimationFrame(audioLoop);
+
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+
+  let sumSq = 0;
+  for (let i = 0; i < data.length; i++) {
+    const norm = (data[i] - 128) / 128;
+    sumSq += norm * norm;
+  }
+  const rms = Math.sqrt(sumSq / data.length);
+
+  energyHistory.push(rms);
+  if (energyHistory.length > 360) energyHistory.shift();
+  const avgEnergy = energyHistory.reduce((a, b) => a + b, 0) / energyHistory.length;
+
+  const meterPct = Math.min(100, Math.round((rms / Math.max(0.02, avgEnergy * 2.2)) * 100));
+  document.getElementById('bassMeter').style.width = meterPct + "%";
+
+  const now = performance.now();
+  const sensRatio = parseInt(document.getElementById('sensitivity').value) / 100;
+
+  if (rms > 0.015 && rms > avgEnergy * sensRatio && (now - lastKickTime) > 260) {
+    lastKickTime = now;
+    kickTimestamps.push(now);
+    if (kickTimestamps.length > 12) kickTimestamps.shift();
+
+    if (kickTimestamps.length >= 4) {
+      let intervals = [];
+      for (let i = 1; i < kickTimestamps.length; i++) {
+        const diff = kickTimestamps[i] - kickTimestamps[i - 1];
+        if (diff >= 280 && diff <= 1000) intervals.push(diff);
+      }
+      if (intervals.length >= 3) {
+        intervals.sort((a, b) => a - b);
+        const medianMs = intervals[Math.floor(intervals.length / 2)];
+        const bpm = Math.round(60000 / medianMs);
+        document.getElementById('bpmVal').innerText = bpm;
+
+        const baseBpm = parseInt(document.getElementById('baseBpm').value) || 128;
+        const scale = Math.max(0.5, Math.min(2.0, bpm / baseBpm));
+        if (Math.abs(scale - lastSentScale) >= 0.04) {
+          lastSentScale = scale;
+          document.getElementById('scaleVal').innerText = scale.toFixed(2) + "x";
+          fetch("/smart?scale=" + scale.toFixed(2), { method: "POST" }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  // Track session loudness ceiling (rises fast on loud drops, decays slowly over ~30s)
+  if (rms > peakEnergy) {
+    peakEnergy = peakEnergy * 0.85 + rms * 0.15;
+  } else {
+    peakEnergy = Math.max(0.025, peakEnergy * 0.9992);
+  }
+
+  if (energyHistory.length >= 90 && (now - lastTagTriggerTime) > 3000) {
+    const recentSlice = energyHistory.slice(-60);
+    const recentPeak = Math.max(...recentSlice);
+    const relativeLevel = recentPeak / peakEnergy; // Peak-to-peak ratio (0.0 to 1.0)
+    const recentKicks = kickTimestamps.filter(t => (now - t) < 2200).length;
+
+    let detectedZone = "build";
+    if (relativeLevel < 0.52 || recentPeak < 0.022) {
+      // Breakdown / quiet intro: sub-bass dropped below ~52% of track ceiling
+      detectedZone = "chill";
+    } else if (relativeLevel >= 0.80 && recentKicks >= 3) {
+      // Drop: strong sub-bass near track ceiling + steady kicks
+      detectedZone = "drop";
+    }
+
+
+    const labelEl = document.getElementById('energyLabel');
+    labelEl.innerText = detectedZone.toUpperCase();
+    labelEl.style.color = detectedZone === "drop" ? "#dc3545" : (detectedZone === "chill" ? "#4da6ff" : "#ffc107");
+
+        if (smartPaused) {
+      currentEnergyZone = detectedZone;
+      return;
+    }
+
+    // Dynamic shuffle pacing: faster during drops (~6s), medium on builds (~10s), relaxed on chill (~16s)
+    const dynamicHoldMs = (detectedZone === 'drop') ? 6000 : ((detectedZone === 'build') ? 10000 : 16000);
+
+    if (detectedZone !== currentEnergyZone) {
+
+      currentEnergyZone = detectedZone;
+      lastTagTriggerTime = now;
+      lastPresetSwitchTime = now;
+      triggerSmartShuffle(detectedZone);
+    } else if ((now - lastPresetSwitchTime) > dynamicHoldMs) {
+      lastTagTriggerTime = now;
+      lastPresetSwitchTime = now;
+      triggerSmartShuffle(detectedZone);
+    }
+  }
+}
+
+// Instant startup from localStorage cache while live ESP32 syncs
+try {
+  const cachedPresets = localStorage.getItem('poi_presets');
+  const cachedPlaylist = localStorage.getItem('poi_playlist');
+  if (cachedPresets) presetsData = JSON.parse(cachedPresets);
+  if (cachedPlaylist) { playlist = JSON.parse(cachedPlaylist); renderPlaylist(); }
+} catch (e) {}
+
+let isFetchingState = false;
+let hasLoadedInitialData = false;
+
+function syncPresetsAndPlaylist() {
+  loadPresets()
+    .then(() => {
+      try { localStorage.setItem('poi_presets', JSON.stringify(presetsData)); } catch (e) {}
+      return loadPlaylist();
+    })
+    .then(() => {
+      try { localStorage.setItem('poi_playlist', JSON.stringify(playlist)); } catch (e) {}
+    })
+    .catch(() => {});
+}
+
+function openWifiSettings() {
+
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    // Opens Android Wi-Fi picker directly
+    window.location.href = 'intent:#Intent;action=android.settings.WIFI_SETTINGS;end';
+  } else {
+    // iOS / Desktop fallback guidance
+    document.getElementById('connectMsg').innerHTML =
+      'Open your device <strong>Settings &rarr; Wi-Fi</strong>, select <strong>LEDPoi</strong>, and tap <em>Use Without Internet</em> if prompted.';
+  }
+}
+
+  
+function safeFetchState() {
+  if (isFetchingState) return;
+  isFetchingState = true;
+  fetch('/state')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('connectScreen').style.display = 'none';
+      document.getElementById('mainUI').style.display = 'block';
+      if (!hasLoadedInitialData) {
+        hasLoadedInitialData = true;
+        syncPresetsAndPlaylist();
+      }
+
+      document.getElementById('statusDot').textContent = '● Connected';
+      document.getElementById('statusDot').style.color = '#4da6ff';
+
+      document.getElementById('brightness').value = d.brightness;
+      document.getElementById('rainbowSpeed').value = 256 - d.rainbowSpeed;
+      document.getElementById('propagationMode').checked = d.propagationMode;
+
+      currentEffect = d.effect;
+      if (currentEffect === 1) rainbowBtn.classList.add('active'); else rainbowBtn.classList.remove('active');
+
+      if (!isEditing && !isSaving) {
+        colorInput.value = rgbToHex(d.solidR, d.solidG, d.solidB);
+        colorBtn.style.backgroundColor = colorInput.value;
+        sequencerSteps = d.sequencerSteps;
+        currentPlaylistIdx = d.currentPlaylistIndex;
+        renderSequencer();
+        renderPlaylist();
+      }
+    })
+    .catch(() => {
+      document.getElementById('statusDot').textContent = '● Offline';
+      document.getElementById('statusDot').style.color = '#dc3545';
+    })
+    .finally(() => { isFetchingState = false; });
+}
+
+safeFetchState();
+syncPresetsAndPlaylist();
+setInterval(safeFetchState, 500);
+
+
+</script>
+</body>
+</html>
